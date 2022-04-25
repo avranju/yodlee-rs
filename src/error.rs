@@ -18,6 +18,9 @@ pub enum Error {
     #[error("Client is in closed state. No operations can be done.")]
     Closed,
 
+    #[error("No valid access token is available for the user.")]
+    NoToken,
+
     #[error("Could not cleanly close the client.")]
     Close,
 }

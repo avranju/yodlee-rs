@@ -1,19 +1,21 @@
 #![deny(rust_2018_idioms, warnings, missing_debug_implementations, unsafe_code)]
 
-use std::{
-    collections::HashMap,
-    sync::{Arc, RwLock},
-    time::Duration,
-};
+use std::sync::{Arc, RwLock};
 
 use error::Error;
 use reqwest::Client as HttpClient;
-use serde::{Deserialize, Serialize};
-use tokio::{sync::mpsc, time::sleep};
+use token_manager::TokenManager;
 use user::User;
 
 pub mod error;
+mod token_manager;
 pub mod user;
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum ClientState {
+    Closed,
+    Open,
+}
 
 #[derive(Debug)]
 pub(crate) struct State {
@@ -23,14 +25,13 @@ pub(crate) struct State {
     client_id: String,
     client_secret: String,
     http_client: HttpClient,
-    admin_token: Option<String>,
-    close_tx: Option<mpsc::Sender<()>>,
-    user: Option<User>,
+    state: ClientState,
 }
 
 #[derive(Debug, Clone)]
 pub struct Client {
     pub(crate) state: Arc<RwLock<State>>,
+    pub(crate) token_manager: TokenManager,
 }
 
 impl Client {
@@ -41,18 +42,20 @@ impl Client {
         client_id: String,
         client_secret: String,
     ) -> Self {
+        let state = Arc::new(RwLock::new(State {
+            api_endpoint,
+            api_version,
+            admin_login_name,
+            client_id,
+            client_secret,
+            http_client: HttpClient::new(),
+            state: ClientState::Closed,
+        }));
+        let token_manager = TokenManager::new(state.clone());
+
         Client {
-            state: Arc::new(RwLock::new(State {
-                api_endpoint,
-                api_version,
-                admin_login_name,
-                client_id,
-                client_secret,
-                http_client: HttpClient::new(),
-                admin_token: None,
-                close_tx: None,
-                user: None,
-            })),
+            state,
+            token_manager,
         }
     }
 
@@ -61,149 +64,33 @@ impl Client {
         self
     }
 
-    pub fn admin_token(&self) -> Option<String> {
-        self.state.read().unwrap().admin_token.clone()
-    }
-
     pub fn is_open(&self) -> bool {
-        self.state.read().unwrap().close_tx.is_some()
+        self.state.read().unwrap().state == ClientState::Open
     }
 
-    pub fn user(&self) -> Option<User> {
-        self.state.read().unwrap().user.clone()
+    pub async fn user(&self, login_name: String) -> Result<User, Error> {
+        User::new(self.clone(), login_name).await
     }
 
-    pub async fn open(&self) -> Result<(), Error> {
+    pub async fn open(&mut self) -> Result<(), Error> {
         // if we are already in open state, don't do nothing
         if self.is_open() {
             return Err(Error::AlreadyOpen);
         }
 
-        // store the state we need to make the API call in new memory
-        // so that we don't hold on to the mutex guard across await points
-        let (endpoint, client_id, client_secret, http_client, api_version, admin_login_name, this) = {
-            let state = self.state.read().unwrap();
-            (
-                // endpoint
-                format!("{}/{}", state.api_endpoint, "auth/token"),
-                state.client_id.clone(),
-                state.client_secret.clone(),
-                state.http_client.clone(),
-                state.api_version.clone(),
-                state.admin_login_name.clone(),
-                self.clone(),
-            )
-        };
-
-        // setup close channel
-        let (close_tx, mut close_rx) = mpsc::channel(1);
-        self.state.write().unwrap().close_tx = Some(close_tx);
-
-        // get the admin token
-        let mut token = get_admin_token(
-            &http_client,
-            &endpoint,
-            &client_id,
-            &client_secret,
-            &api_version,
-            &admin_login_name,
-        )
-        .await?;
-
-        {
-            let mut state = self.state.write().unwrap();
-            state.admin_token = Some(token.access_token.clone());
-            state.user = Some(User::new(self.clone()));
-        }
-
-        // build a future that does the work necessary to always have a valid
-        // admin token
-        let token_future = async move {
-            loop {
-                tokio::select! {
-                    _ = sleep(Duration::from_secs(token.expires_in)) => {
-                        // refresh the admin token
-                        match get_admin_token(
-                            &http_client,
-                            &endpoint,
-                            &client_id,
-                            &client_secret,
-                            &api_version,
-                            &admin_login_name,
-                        ).await {
-                            Ok(new_token) => {
-                                token = new_token;
-                                this.state.write().unwrap().admin_token = Some(token.access_token.clone());
-                            },
-                            Err(_) => {
-                                let mut state = this.state.write().unwrap();
-                                state.admin_token = None;
-                                state.close_tx = None;
-                                break;
-                            }
-                        }
-                    }
-                    _ = close_rx.recv() => {
-                        this.state.write().unwrap().admin_token = None;
-                        break;
-                    }
-                }
-            }
-        };
-
-        tokio::spawn(token_future);
-
+        self.token_manager
+            .add_admin_login(self.state.read().unwrap().admin_login_name.clone())
+            .await?;
+        self.state.write().unwrap().state = ClientState::Open;
         Ok(())
     }
 
     pub async fn close(self) -> Result<(), Error> {
-        if let Some(close_tx) = self.state.write().unwrap().close_tx.take() {
-            close_tx.send(()).await.map_err(|_| Error::Close)?;
-        }
+        self.token_manager.close().await;
+
+        // NOTE: We don't need to do the following because self is dropped here.
+        //self.state.write().unwrap().state = ClientState::Closed;
 
         Ok(())
     }
-}
-
-async fn get_admin_token(
-    http_client: &HttpClient,
-    endpoint: &str,
-    client_id: &str,
-    client_secret: &str,
-    api_version: &str,
-    admin_login_name: &str,
-) -> Result<Token, Error> {
-    let mut body = HashMap::new();
-    body.insert("clientId", client_id);
-    body.insert("secret", client_secret);
-
-    let res = http_client
-        .post(endpoint)
-        .header("Api-Version", api_version)
-        .header("loginName", admin_login_name)
-        .form(&body)
-        .send()
-        .await?;
-
-    if res.status().is_success() {
-        let auth_response = res.json::<AuthResponse>().await?;
-
-        Ok(auth_response.token)
-    } else {
-        Err(Error::Api)
-    }
-}
-
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-struct AuthResponse {
-    pub token: Token,
-}
-
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-struct Token {
-    pub access_token: String,
-    pub issued_at: String,
-    pub expires_in: u64,
 }

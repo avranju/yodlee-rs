@@ -5,7 +5,7 @@ use crate::{error::Error, Client};
 
 #[derive(Debug, Default, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct UserRequestPreferences {
+pub struct UserPreferences {
     pub date_format: Option<String>,
     pub time_zone: Option<String>,
     pub currency: Option<String>,
@@ -36,7 +36,7 @@ pub struct UserName {
 #[derive(Debug, Default, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct UserRegistration {
-    pub preferences: Option<UserRequestPreferences>,
+    pub preferences: Option<UserPreferences>,
     pub address: Option<UserAddress>,
     pub login_name: String,
     pub name: Option<UserName>,
@@ -52,55 +52,101 @@ pub struct UserSession {
 
 #[derive(Debug, Default, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct UserRegistrationResponse {
-    pub preferences: Option<UserRequestPreferences>,
+pub struct UserDetailsResponse {
+    pub user: UserResponse,
+}
+
+#[derive(Debug, Default, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct UserResponse {
+    pub preferences: Option<UserPreferences>,
     pub session: Option<UserSession>,
     pub login_name: String,
     pub name: Option<UserName>,
     pub id: Option<i64>,
     pub role_type: Option<String>,
+    pub email: Option<String>,
+    pub segment_name: Option<String>,
 }
 
 #[derive(Debug, Clone)]
 pub struct User {
+    login_name: String,
     client: Client,
 }
 
 impl User {
-    pub fn new(client: Client) -> Self {
-        User { client }
+    pub async fn new(mut client: Client, login_name: String) -> Result<Self, Error> {
+        client.token_manager.add_login(login_name.clone()).await?;
+        Ok(User { login_name, client })
     }
 
-    pub async fn register(
-        &self,
-        user: UserRegistration,
-    ) -> Result<UserRegistrationResponse, Error> {
-        if !self.client.is_open() {
-            return Err(Error::Closed);
+    async fn ensure_token(&mut self) -> Result<String, Error> {
+        match self.client.token_manager.get_token(&self.login_name) {
+            Some(token) => Ok(token),
+            None => {
+                self.client
+                    .token_manager
+                    .add_login(self.login_name.clone())
+                    .await?;
+                self.client
+                    .token_manager
+                    .get_token(&self.login_name)
+                    .ok_or(Error::NoToken)
+            }
         }
+    }
 
-        let (endpoint, api_version, http_client, admin_token) = {
+    pub async fn get_details(&mut self) -> Result<UserDetailsResponse, Error> {
+        let access_token = self.ensure_token().await?;
+        let (endpoint, api_version, http_client) = {
+            let state = self.client.state.read().unwrap();
+            (
+                // endpoint
+                format!("{}/{}", state.api_endpoint, "user"),
+                state.api_version.clone(),
+                state.http_client.clone(),
+            )
+        };
+
+        let res = http_client
+            .get(endpoint)
+            .header("Api-Version", api_version)
+            .header(header::AUTHORIZATION, format!("Bearer {access_token}"))
+            .send()
+            .await?;
+
+        if res.status().is_success() {
+            let user_response: UserDetailsResponse = res.json().await?;
+            Ok(user_response)
+        } else {
+            Err(Error::Api)
+        }
+    }
+
+    pub async fn register(&mut self, user: UserRegistration) -> Result<UserResponse, Error> {
+        let access_token = self.ensure_token().await?;
+        let (endpoint, api_version, http_client) = {
             let state = self.client.state.read().unwrap();
             (
                 // endpoint
                 format!("{}/{}", state.api_endpoint, "user/register"),
                 state.api_version.clone(),
                 state.http_client.clone(),
-                state.admin_token.clone().expect("Admin token is not set"),
             )
         };
 
         let res = http_client
             .post(endpoint)
             .header("Api-Version", api_version)
-            .header(header::AUTHORIZATION, format!("Bearer {admin_token}"))
+            .header(header::AUTHORIZATION, format!("Bearer {access_token}"))
             .json(&user)
             .send()
             .await?;
 
         if res.status().is_success() {
-            let user_registration_response: UserRegistrationResponse = res.json().await?;
-            Ok(user_registration_response)
+            let user_response: UserResponse = res.json().await?;
+            Ok(user_response)
         } else {
             Err(Error::Api)
         }
