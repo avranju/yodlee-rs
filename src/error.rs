@@ -1,7 +1,7 @@
 use thiserror::Error;
 
 #[derive(Error, Debug)]
-pub enum YodleeError {
+pub enum Error {
     // TODO: Fetch the error code from the response body and store in this variant.
     #[error("Yodlee API call failed.")]
     Api,
@@ -14,6 +14,9 @@ pub enum YodleeError {
 
     #[error("Client is already open.")]
     AlreadyOpen,
+
+    #[error("Client is in closed state. No operations can be done.")]
+    Closed,
 
     #[error("Could not cleanly close the client.")]
     Close,

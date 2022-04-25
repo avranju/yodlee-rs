@@ -6,15 +6,17 @@ use std::{
     time::Duration,
 };
 
-use error::YodleeError;
+use error::Error;
 use reqwest::Client as HttpClient;
 use serde::{Deserialize, Serialize};
 use tokio::{sync::mpsc, time::sleep};
+use user::User;
 
 pub mod error;
+pub mod user;
 
 #[derive(Debug)]
-struct State {
+pub(crate) struct State {
     api_endpoint: String,
     api_version: String,
     admin_login_name: String,
@@ -23,11 +25,12 @@ struct State {
     http_client: HttpClient,
     admin_token: Option<String>,
     close_tx: Option<mpsc::Sender<()>>,
+    user: Option<User>,
 }
 
 #[derive(Debug, Clone)]
 pub struct Client {
-    state: Arc<RwLock<State>>,
+    pub(crate) state: Arc<RwLock<State>>,
 }
 
 impl Client {
@@ -48,6 +51,7 @@ impl Client {
                 http_client: HttpClient::new(),
                 admin_token: None,
                 close_tx: None,
+                user: None,
             })),
         }
     }
@@ -65,13 +69,17 @@ impl Client {
         self.state.read().unwrap().close_tx.is_some()
     }
 
-    pub async fn open(&self) -> Result<(), YodleeError> {
+    pub fn user(&self) -> Option<User> {
+        self.state.read().unwrap().user.clone()
+    }
+
+    pub async fn open(&self) -> Result<(), Error> {
         // if we are already in open state, don't do nothing
         if self.is_open() {
-            return Err(YodleeError::AlreadyOpen);
+            return Err(Error::AlreadyOpen);
         }
 
-        // retrieve the state we need to make the API call into new memory
+        // store the state we need to make the API call in new memory
         // so that we don't hold on to the mutex guard across await points
         let (endpoint, client_id, client_secret, http_client, api_version, admin_login_name, this) = {
             let state = self.state.read().unwrap();
@@ -101,7 +109,12 @@ impl Client {
             &admin_login_name,
         )
         .await?;
-        self.state.write().unwrap().admin_token = Some(token.access_token.clone());
+
+        {
+            let mut state = self.state.write().unwrap();
+            state.admin_token = Some(token.access_token.clone());
+            state.user = Some(User::new(self.clone()));
+        }
 
         // build a future that does the work necessary to always have a valid
         // admin token
@@ -143,9 +156,9 @@ impl Client {
         Ok(())
     }
 
-    pub async fn close(self) -> Result<(), YodleeError> {
+    pub async fn close(self) -> Result<(), Error> {
         if let Some(close_tx) = self.state.write().unwrap().close_tx.take() {
-            close_tx.send(()).await.map_err(|_| YodleeError::Close)?;
+            close_tx.send(()).await.map_err(|_| Error::Close)?;
         }
 
         Ok(())
@@ -159,7 +172,7 @@ async fn get_admin_token(
     client_secret: &str,
     api_version: &str,
     admin_login_name: &str,
-) -> Result<Token, YodleeError> {
+) -> Result<Token, Error> {
     let mut body = HashMap::new();
     body.insert("clientId", client_id);
     body.insert("secret", client_secret);
@@ -177,7 +190,7 @@ async fn get_admin_token(
 
         Ok(auth_response.token)
     } else {
-        Err(YodleeError::Api)
+        Err(Error::Api)
     }
 }
 
