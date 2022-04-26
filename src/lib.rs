@@ -3,9 +3,9 @@
 use std::sync::{Arc, RwLock};
 
 use error::Error;
-use reqwest::Client as HttpClient;
+use reqwest::{header, Client as HttpClient};
 use token_manager::TokenManager;
-use user::User;
+use user::{User, UserDetailsResponse, UserRegistration};
 
 pub mod error;
 mod token_manager;
@@ -92,5 +92,38 @@ impl Client {
         //self.state.write().unwrap().state = ClientState::Closed;
 
         Ok(())
+    }
+
+    pub async fn register_user(
+        &mut self,
+        user: UserRegistration,
+    ) -> Result<UserDetailsResponse, Error> {
+        // user registration must use the admin token to do its business
+        let access_token = self.token_manager.get_admin_token().ok_or(Error::NoToken)?;
+
+        let (endpoint, api_version, http_client) = {
+            let state = self.state.read().unwrap();
+            (
+                // endpoint
+                format!("{}/{}", state.api_endpoint, "user/register"),
+                state.api_version.clone(),
+                state.http_client.clone(),
+            )
+        };
+
+        let res = http_client
+            .post(endpoint)
+            .header("Api-Version", api_version)
+            .header(header::AUTHORIZATION, format!("Bearer {access_token}"))
+            .json(&user)
+            .send()
+            .await?;
+
+        if res.status().is_success() {
+            let user_response: UserDetailsResponse = res.json().await?;
+            Ok(user_response)
+        } else {
+            Err(Error::Api)
+        }
     }
 }

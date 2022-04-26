@@ -123,32 +123,4 @@ impl User {
             Err(Error::Api)
         }
     }
-
-    pub async fn register(&mut self, user: UserRegistration) -> Result<UserResponse, Error> {
-        let access_token = self.ensure_token().await?;
-        let (endpoint, api_version, http_client) = {
-            let state = self.client.state.read().unwrap();
-            (
-                // endpoint
-                format!("{}/{}", state.api_endpoint, "user/register"),
-                state.api_version.clone(),
-                state.http_client.clone(),
-            )
-        };
-
-        let res = http_client
-            .post(endpoint)
-            .header("Api-Version", api_version)
-            .header(header::AUTHORIZATION, format!("Bearer {access_token}"))
-            .json(&user)
-            .send()
-            .await?;
-
-        if res.status().is_success() {
-            let user_response: UserResponse = res.json().await?;
-            Ok(user_response)
-        } else {
-            Err(Error::Api)
-        }
-    }
 }

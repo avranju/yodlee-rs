@@ -50,7 +50,7 @@ async fn test_get_user_details() {
 // Disabling test because user registration in sandbox is not supported.
 //#[tokio::test]
 async fn _test_user_registration() {
-    let (config, mut client) = make_client();
+    let (_, mut client) = make_client();
     let _ = client.open().await.unwrap();
 
     let user_registration = UserRegistration {
@@ -58,8 +58,7 @@ async fn _test_user_registration() {
         ..Default::default()
     };
 
-    let mut admin_user = client.user(config.admin_login_name).await.unwrap();
-    let res = admin_user.register(user_registration).await.unwrap();
+    let res = client.register_user(user_registration).await.unwrap();
 
     println!("{:#?}", res);
 
