@@ -128,8 +128,7 @@ impl Client {
             .await?;
 
         if res.status().is_success() {
-            let user_response: UserDetailsResponse = res.json().await?;
-            Ok(user_response)
+            Ok(res.json().await?)
         } else {
             Err(Error::Api)
         }

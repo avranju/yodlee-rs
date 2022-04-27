@@ -58,8 +58,7 @@ impl Account {
             .await?;
 
         if res.status().is_success() {
-            let accounts: AccountResponse = res.json().await?;
-            Ok(accounts)
+            Ok(res.json().await?)
         } else {
             Err(Error::Api)
         }
