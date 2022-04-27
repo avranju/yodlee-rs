@@ -1,6 +1,13 @@
 use reqwest::header;
+use serde::{Deserialize, Serialize};
 
-use crate::{error::Error, models::UserDetailsResponse, Client};
+use crate::{error::Error, models::User as UserModel, Client};
+
+#[derive(Debug, Default, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct UserDetailsResponse {
+    pub user: UserModel,
+}
 
 #[derive(Debug, Clone)]
 pub struct User {

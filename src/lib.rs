@@ -4,10 +4,10 @@ use std::sync::{Arc, RwLock};
 
 use account::Account;
 use error::Error;
-use models::{UserDetailsResponse, UserRegistration};
+use models::UserRegistration;
 use reqwest::{header, Client as HttpClient};
 use token_manager::TokenManager;
-use user::User;
+use user::{User, UserDetailsResponse};
 
 pub mod account;
 pub mod error;

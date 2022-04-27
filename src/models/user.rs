@@ -49,13 +49,7 @@ pub struct UserSession {
 
 #[derive(Debug, Default, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct UserDetailsResponse {
-    pub user: UserResponse,
-}
-
-#[derive(Debug, Default, Deserialize, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct UserResponse {
+pub struct User {
     pub preferences: Option<UserPreferences>,
     pub session: Option<UserSession>,
     pub login_name: String,
