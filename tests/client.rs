@@ -1,5 +1,5 @@
 use serde::Deserialize;
-use yodlee_rs::{user::UserRegistration, Client};
+use yodlee_rs::{models::UserRegistration, Client};
 
 #[derive(Deserialize, Clone, Debug)]
 struct Config {
@@ -59,6 +59,22 @@ async fn _test_user_registration() {
     };
 
     let res = client.register_user(user_registration).await.unwrap();
+
+    println!("{:#?}", res);
+
+    client.close().await.unwrap();
+}
+
+#[tokio::test]
+async fn test_get_accounts() {
+    let (config, mut client) = make_client();
+    let _ = client.open().await.unwrap();
+
+    let mut account = client.account(config.test_user1.clone());
+    let res = account
+        .get_accounts(None, None, None, None, None, None)
+        .await
+        .unwrap();
 
     println!("{:#?}", res);
 

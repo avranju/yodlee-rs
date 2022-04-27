@@ -103,7 +103,7 @@ impl TokenManager {
             &client_secret,
             &api_version,
             &login_name,
-            admin_access_token.as_ref().map(|s| s.as_str()),
+            admin_access_token.as_deref(),
         )
         .await?;
         let mut expires_in = token.expires_in;
@@ -135,7 +135,7 @@ impl TokenManager {
                             &client_secret,
                             &api_version,
                             &login_name,
-                            admin_access_token.as_ref().map(|s| s.as_str()),
+                            admin_access_token.as_deref(),
                         ).await {
                             Ok(new_token) => {
                                 // save token expiry duration so we can schedule the next refresh

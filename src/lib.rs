@@ -2,12 +2,16 @@
 
 use std::sync::{Arc, RwLock};
 
+use account::Account;
 use error::Error;
+use models::{UserDetailsResponse, UserRegistration};
 use reqwest::{header, Client as HttpClient};
 use token_manager::TokenManager;
-use user::{User, UserDetailsResponse, UserRegistration};
+use user::User;
 
+pub mod account;
 pub mod error;
+pub mod models;
 mod token_manager;
 pub mod user;
 
@@ -72,6 +76,10 @@ impl Client {
         User::new(self.clone(), login_name).await
     }
 
+    pub fn account(&self, login_name: String) -> Account {
+        Account::new(self.clone(), login_name)
+    }
+
     pub async fn open(&mut self) -> Result<(), Error> {
         // if we are already in open state, don't do nothing
         if self.is_open() {
@@ -124,6 +132,18 @@ impl Client {
             Ok(user_response)
         } else {
             Err(Error::Api)
+        }
+    }
+
+    pub(crate) async fn ensure_token(&mut self, login_name: &str) -> Result<String, Error> {
+        match self.token_manager.get_token(login_name) {
+            Some(token) => Ok(token),
+            None => {
+                self.token_manager.add_login(login_name.to_string()).await?;
+                self.token_manager
+                    .get_token(login_name)
+                    .ok_or(Error::NoToken)
+            }
         }
     }
 }
