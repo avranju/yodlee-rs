@@ -126,6 +126,8 @@ impl TokenManager {
         let token_future = async move {
             loop {
                 tokio::select! {
+                    // TODO: We should probably sleep for slightly less than the expiration
+                    // duration instead of living on the edge.
                     _ = sleep(Duration::from_secs(expires_in)) => {
                         // refresh the access token
                         match get_access_token(
@@ -152,6 +154,9 @@ impl TokenManager {
                                 });
                             },
                             Err(_) => {
+                                // TODO: This *could* have failed due to a transient error and we
+                                // should really retry this before giving up. But let's cross that
+                                // bridge when we come to it.
                                 this.tokens.write().unwrap().remove(&login_name);
                                 break;
                             }
@@ -179,10 +184,16 @@ impl TokenManager {
     }
 
     pub(crate) async fn close(self) {
-        let tokens = self.tokens.write().unwrap();
-        for (_, token_entry) in tokens.iter() {
+        let channels = self
+            .tokens
+            .write()
+            .unwrap()
+            .iter()
+            .map(|(_, e)| e.close_tx.clone())
+            .collect::<Vec<_>>();
+        for close_tx in channels {
             // we don't really care if this fails
-            let _ = token_entry.close_tx.send(()).await;
+            let _ = close_tx.send(()).await;
         }
     }
 }
