@@ -233,6 +233,6 @@ async fn get_access_token(
 
         Ok(auth_response.token)
     } else {
-        Err(Error::Api)
+        Err(Error::Api(res.json().await?))
     }
 }

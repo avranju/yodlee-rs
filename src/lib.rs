@@ -132,7 +132,7 @@ impl Client {
         if res.status().is_success() {
             Ok(res.json().await?)
         } else {
-            Err(Error::Api)
+            Err(Error::Api(res.json().await?))
         }
     }
 

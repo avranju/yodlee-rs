@@ -1,10 +1,15 @@
+use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 #[derive(Error, Debug)]
 pub enum Error {
     // TODO: Fetch the error code from the response body and store in this variant.
-    #[error("Yodlee API call failed.")]
-    Api,
+    #[error(
+        "Yodlee API call failed.\n\tCode: {}\n\tMessage: {}\n\tReference: {}",
+        .0.error_code.as_ref().map(|c| c.as_str()).unwrap_or("Unknown"),
+        .0.error_message.as_ref().map(|c| c.as_str()).unwrap_or("Unknown"),
+        .0.reference_code.as_ref().map(|c| c.as_str()).unwrap_or("Unknown"),)]
+    Api(ApiError),
 
     #[error("HTTP error: {0}")]
     Http(#[from] reqwest::Error),
@@ -23,4 +28,12 @@ pub enum Error {
 
     #[error("Could not cleanly close the client.")]
     Close,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ApiError {
+    pub error_code: Option<String>,
+    pub error_message: Option<String>,
+    pub reference_code: Option<String>,
 }
