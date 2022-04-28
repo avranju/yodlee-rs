@@ -46,4 +46,30 @@ impl User {
             Err(Error::Api(res.json().await?))
         }
     }
+
+    pub async fn delete(&mut self) -> Result<(), Error> {
+        let access_token = self.client.ensure_token(&self.login_name).await?;
+        let (endpoint, api_version, http_client) = {
+            let state = self.client.state.read().unwrap();
+            (
+                // endpoint
+                format!("{}/{}", state.api_endpoint, "user/unregister"),
+                state.api_version.clone(),
+                state.http_client.clone(),
+            )
+        };
+
+        let res = http_client
+            .delete(endpoint)
+            .header("Api-Version", api_version)
+            .header(header::AUTHORIZATION, format!("Bearer {access_token}"))
+            .send()
+            .await?;
+
+        if res.status().is_success() {
+            Ok(())
+        } else {
+            Err(Error::Api(res.json().await?))
+        }
+    }
 }
