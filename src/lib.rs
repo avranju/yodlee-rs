@@ -6,6 +6,7 @@ use account::Account;
 use error::Error;
 use models::UserRegistration;
 use reqwest::{header, Client as HttpClient};
+use serde::{Deserialize, Serialize};
 use token_manager::TokenManager;
 use user::{User, UserDetailsResponse};
 
@@ -119,11 +120,12 @@ impl Client {
             )
         };
 
+        let req = UserRegistrationRequest { user };
         let res = http_client
             .post(endpoint)
             .header("Api-Version", api_version)
             .header(header::AUTHORIZATION, format!("Bearer {access_token}"))
-            .json(&user)
+            .json(&req)
             .send()
             .await?;
 
@@ -145,4 +147,9 @@ impl Client {
             }
         }
     }
+}
+
+#[derive(Debug, Default, Serialize, Deserialize)]
+struct UserRegistrationRequest {
+    user: UserRegistration,
 }
