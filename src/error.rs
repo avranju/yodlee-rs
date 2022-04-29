@@ -6,9 +6,9 @@ pub enum Error {
     // TODO: Fetch the error code from the response body and store in this variant.
     #[error(
         "Yodlee API call failed.\n\tCode: {}\n\tMessage: {}\n\tReference: {}",
-        .0.error_code.as_ref().map(|c| c.as_str()).unwrap_or("Unknown"),
-        .0.error_message.as_ref().map(|c| c.as_str()).unwrap_or("Unknown"),
-        .0.reference_code.as_ref().map(|c| c.as_str()).unwrap_or("Unknown"),)]
+        .0.error_code.as_deref().unwrap_or("Unknown"),
+        .0.error_message.as_deref().unwrap_or("Unknown"),
+        .0.reference_code.as_deref().unwrap_or("Unknown"),)]
     Api(ApiError),
 
     #[error("HTTP error: {0}")]

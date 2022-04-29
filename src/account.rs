@@ -5,7 +5,7 @@ use crate::{error::Error, models::Account as AccountModel, Client};
 
 #[derive(Debug, Default, Deserialize, Serialize)]
 pub struct AccountResponse {
-    account: Vec<AccountModel>,
+    pub account: Vec<AccountModel>,
 }
 
 #[derive(Debug)]
