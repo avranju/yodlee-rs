@@ -55,6 +55,14 @@ impl TokenManager {
         Ok(())
     }
 
+    pub(crate) fn get_token(&self, login_name: &str) -> Option<String> {
+        self.tokens
+            .read()
+            .unwrap()
+            .get(login_name)
+            .map(|e| e.token.access_token.clone())
+    }
+
     pub(crate) fn get_admin_token(&self) -> Option<String> {
         self.admin_login_name
             .as_ref()
@@ -73,6 +81,12 @@ impl TokenManager {
     }
 
     pub(crate) async fn add_login(&mut self, login_name: String) -> Result<(), Error> {
+        // if our token cache already has a login for this login name then
+        // we don't need to fetch a fresh token
+        if self.get_token(&login_name).is_some() {
+            return Ok(());
+        }
+
         // store the state we need to make the API call in new memory
         // so that we don't hold on to the mutex guard across await points
         let (endpoint, client_id, client_secret, http_client, api_version, this) = {
@@ -173,14 +187,6 @@ impl TokenManager {
         tokio::spawn(token_future);
 
         Ok(())
-    }
-
-    pub(crate) fn get_token(&self, login_name: &str) -> Option<String> {
-        self.tokens
-            .read()
-            .unwrap()
-            .get(login_name)
-            .map(|e| e.token.access_token.clone())
     }
 
     pub(crate) async fn close(self) {

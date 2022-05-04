@@ -21,6 +21,10 @@ impl User {
         Ok(User { login_name, client })
     }
 
+    pub async fn get_token(&mut self) -> Result<String, Error> {
+        Ok(self.client.ensure_token(&self.login_name).await?)
+    }
+
     pub async fn get_details(&mut self) -> Result<UserDetailsResponse, Error> {
         let access_token = self.client.ensure_token(&self.login_name).await?;
         let (endpoint, api_version, http_client) = {
