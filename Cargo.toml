@@ -6,11 +6,15 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-reqwest = { version = "0.11.10", features = ["json"] }
 serde = { version = "1.0.136", features = ["derive"] }
 serde_json = "1.0.79"
 thiserror = "1.0.30"
 tokio = { version = "1.17.0", features = ["rt", "time", "macros"] }
+
+[dependencies.reqwest]
+version = "0.11.10"
+default-features = false
+features = ["rustls-tls", "rustls-tls-webpki-roots", "rustls-tls-native-roots", "json"]
 
 [dev-dependencies]
 envy = "0.4.2"
