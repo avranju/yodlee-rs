@@ -22,7 +22,7 @@ impl User {
     }
 
     pub async fn get_token(&mut self) -> Result<String, Error> {
-        Ok(self.client.ensure_token(&self.login_name).await?)
+        self.client.ensure_token(&self.login_name).await
     }
 
     pub async fn get_details(&mut self) -> Result<UserDetailsResponse, Error> {

@@ -71,10 +71,7 @@ async fn test_get_accounts() {
     let _ = client.open().await.unwrap();
 
     let mut account = client.account(config.test_user1.clone());
-    let res = account
-        .get_accounts(None, None, None, None, None, None)
-        .await
-        .unwrap();
+    let res = account.get_accounts(Default::default()).await.unwrap();
 
     println!("{:#?}", res);
 
