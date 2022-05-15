@@ -5,6 +5,6 @@ use super::HistoricalBalance;
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AccountHistory {
-    historical_balances: Option<Vec<HistoricalBalance>>,
-    id: Option<i64>,
+    pub historical_balances: Option<Vec<HistoricalBalance>>,
+    pub id: Option<i64>,
 }
