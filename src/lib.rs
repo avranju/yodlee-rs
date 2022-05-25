@@ -87,9 +87,8 @@ impl Client {
             return Err(Error::AlreadyOpen);
         }
 
-        self.token_manager
-            .add_admin_login(self.state.read().unwrap().admin_login_name.clone())
-            .await?;
+        let login_name = self.state.read().unwrap().admin_login_name.clone();
+        self.token_manager.add_admin_login(login_name).await?;
         self.state.write().unwrap().state = ClientState::Open;
         Ok(())
     }

@@ -103,6 +103,33 @@ impl Account {
             Err(Error::Api(res.json().await?))
         }
     }
+
+    pub async fn delete(&mut self, account_id: String) -> Result<(), Error> {
+        let access_token = self.client.ensure_token(&self.login_name).await?;
+
+        let (endpoint, api_version, http_client) = {
+            let state = self.client.state.read().unwrap();
+            (
+                // endpoint
+                format!("{}/{}/{}", state.api_endpoint, "accounts", account_id),
+                state.api_version.clone(),
+                state.http_client.clone(),
+            )
+        };
+
+        let res = http_client
+            .delete(endpoint)
+            .header("Api-Version", api_version)
+            .header(header::AUTHORIZATION, format!("Bearer {access_token}"))
+            .send()
+            .await?;
+
+        if res.status().is_success() {
+            Ok(())
+        } else {
+            Err(Error::Api(res.json().await?))
+        }
+    }
 }
 
 #[derive(Debug, Default)]
